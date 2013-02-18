@@ -25,6 +25,29 @@
 
 module.exports = IpHeader;
 
+// most common protocols, expand as needed
+var PROTOCOL_TO_STRING = {
+  1: 'icmp',
+  2: 'igmp',
+  6: 'tcp',
+  17: 'udp',
+  41: 'encap',
+  89: 'ospf',
+  132: 'sctp'
+};
+
+var PROTOCOL_FROM_STRING = {
+  icmp: 1,
+  igmp: 2,
+  tcp: 6,
+  udp: 17,
+  encap: 41,
+  ospf: 89,
+  sctp: 132
+};
+
+// TODO: consider forcing only 20-byte headers since we don't handle options
+
 function IpHeader(opts) {
   if (opts instanceof Buffer) {
     return IpHeader.fromBuffer(opts);
@@ -36,8 +59,22 @@ function IpHeader(opts) {
 
   opts = opts || {};
 
-  // TODO: handle defaults
-  self.bytes = opts.bytes;
+  self.flags = {};
+  self.flags.df = !!opts.df;
+  self.flags.mf = !!opts.mf;
+  self.id = ~~opts.id;
+  self.offset = ~~opts.offset;
+  self.ttl = opts.ttl || 64;
+  self.protocol = opts.protocol || 'tcp';
+  self.protocolCode = opts.protocolCode || PROTOCOL_FROM_STRING[self.protocol];
+  self.src = opts.src || '127.0.0.1';
+  self.dst = opts.src || '127.0.0.1';
+  self.bytes = opts.bytes || 20;
+  self.totalBytes = opts.totalBytes || self.bytes;
+
+  if (!self.protocolCode) {
+    throw new Error('Unsupported protocol [' + self.protocol + ']');
+  }
 
   return self;
 }
@@ -45,16 +82,120 @@ function IpHeader(opts) {
 IpHeader.fromBuffer = function(buf, offset) {
   offset = ~~offset;
 
-  // TODO: implement fromBuffer()
+  var tmp = buf.readUInt8(offset);
+  offset += 1;
 
-  return new IpHeader({});
+  var version = (tmp & 0xf0) >> 4;
+  if (version != 4) {
+    throw new Error('Unsupported IP version [' + version + ']; must be IPv4.');
+  }
+
+  var headerLength = (tmp & 0x0f) * 4;
+
+  // skip DSCP and ECN fields
+  offset += 1;
+
+  var totalLength = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var id = buf.readUInt16BE(offset);
+  offset += 2;
+
+  tmp = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var flags = (tmp & 0xe000) >> 13;
+  var fragmentOffset = tmp & 0x1fff;
+
+  var df = !!(flags & 0x2);
+  var mf = !!(flags & 0x4);
+
+  var ttl = buf.readUInt8(offset);
+  offset += 1;
+
+  var protocolCode = buf.readUInt8(offset);
+  offset += 1;
+
+  var protocol = PROTOCOL_TO_STRING[protocolCode];
+  if (!protocol) {
+    throw new Error('Unsupported protocol code [' + protocolCode + ']');
+  }
+
+  var checksum = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var src = ip.toString(buf.slice(offset, offset + 4));
+  offset += 4;
+
+  var dst = ip.toString(buf.slice(offset, offset + 4));
+  offset += 4;
+
+  var bytes = headerLength;
+
+  return new IpHeader({
+    flags: {df: df, mf: mf},
+    id: id,
+    offset: fragmentOffset,
+    ttl: ttl,
+    protocol: protocol,
+    protocolCode: protocolCode,
+    src: src,
+    dst: dst,
+    bytes: bytes,
+    totalBytes: totalLength
+  });
 };
 
 IpHeader.prototype.toBuffer = function(buf, offset) {
   offset = ~~offset;
-  buf = (buf instanceof Buffer) ? buf : new Buffer(this.bytes);
+  buf = (buf instanceof Buffer) ? buf : new Buffer(offset + this.bytes);
 
-  // TODO: implement toBuffer
+  var tmp = 0x40 | ((this.bytes / 4) & 0x0f);
+  buf.writeUInt8(tmp, offset);
+  offset += 1;
+
+  // skip DSCP and ECN fields
+  buf.writeUInt8(0, offset);
+  offset += 1;
+
+  buf.writeUInt16BE(this.totalBytes, offset);
+  offset += 2;
+
+  buf.writeUInt16BE(this.id, offset);
+  offset += 2;
+
+  var dfMask = this.flags.df ? 0x2 : 0;
+  var mfMask = this.flags.mf ? 0x4 : 0;
+  var flags = dfMask | mfMask;
+  tmp = (flags << 13) | (this.offset & 0x1fff)
+
+  buf.writeUInt16BE(tmp, offset);
+  offset += 2;
+
+  buf.writeUInt8(this.ttl, offset);
+  offset += 1;
+
+  buf.writeUInt8(this.protocolCode, offset);
+  offset += 1;
+
+  // write zero checksum for now
+  var checksumOffset = offset;
+  buf.writeUInt16BE(0, offset);
+  offset += 2;
+
+  ip.toBuffer(this.src).copy(buf, offset);
+  offset += 4;
+
+  ip.toBuffer(this.dst).copy(buf, offset);
+  offset += 4;
+
+  // recalculate the checksum
+  var sum = 0;
+  for (var i = 0; i < offset; i += 2) {
+    sum += buf.readUInt16BE(i);
+  }
+  var checksum = ~(2 + sum);
+  buf.writeUInt16BE(checksum, checksumOffset);
 
   return buf;
 };
