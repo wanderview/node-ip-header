@@ -1,0 +1,27 @@
+{
+  "name": "ip-header",
+  "description": "IP header parsing",
+  "keywords": [
+    "IP",
+    "header",
+    "binary",
+    "parse"
+  ],
+  "version": "0.0.0",
+  "author": "Ben Kelly <ben@wanderview.com>",
+  "license": "BSD",
+  "dependencies": {
+    "ip": "~0.0.4"
+  },
+  "devDependencies": {
+    "nodeunit": "~0.7.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:wanderview/node-ip-header.git"
+  },
+  "scripts": {
+    "test": "nodeunit test"
+  },
+  "main": "iph.js"
+}
