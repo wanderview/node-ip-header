@@ -25,9 +25,95 @@
 
 var IpHeader = require('../iph');
 
-module.exports.nop = function(test) {
-  test.expect(1);
-  var iph = new IpHeader();
-  test.ok(iph instanceof IpHeader);
-  test.done();
+var path = require('path');
+var pcap = require('pcap-parser');
+
+var FILE = path.join(__dirname, 'data', 'netbios-ns-b-query-winxp.pcap');
+
+module.exports.fromBuffer = function(test) {
+  test.expect(12);
+
+  var parser = pcap.parse(FILE);
+  parser.on('packetData', function(payload) {
+    var iph = IpHeader.fromBuffer(payload, 14);
+    test.equals('192.168.207.128', iph.src);
+    test.equals('192.168.207.2', iph.dst);
+    test.equals(23793, iph.id);
+    test.equals(128, iph.ttl);
+    test.equals('udp', iph.protocol);
+    test.equals(17, iph.protocolCode);
+    test.equals(0, iph.offset);
+    test.equals(false, iph.flags.df);
+    test.equals(false, iph.flags.mf);
+    test.equals(20, iph.length);
+    test.equals(78, iph.totalLength);
+    test.equals(58, iph.dataLength);
+
+    test.done();
+  });
+};
+
+module.exports.fromBufferNew = function(test) {
+  test.expect(12);
+
+  var parser = pcap.parse(FILE);
+  parser.on('packetData', function(payload) {
+    var iph = new IpHeader(payload, 14);
+    test.equals('192.168.207.128', iph.src);
+    test.equals('192.168.207.2', iph.dst);
+    test.equals(23793, iph.id);
+    test.equals(128, iph.ttl);
+    test.equals('udp', iph.protocol);
+    test.equals(17, iph.protocolCode);
+    test.equals(0, iph.offset);
+    test.equals(false, iph.flags.df);
+    test.equals(false, iph.flags.mf);
+    test.equals(20, iph.length);
+    test.equals(78, iph.totalLength);
+    test.equals(58, iph.dataLength);
+
+    test.done();
+  });
+};
+
+module.exports.toBuffer = function(test) {
+  test.expect(20);
+
+  var parser = pcap.parse(FILE);
+  parser.on('packetData', function(payload) {
+    // skip ether frame
+    var etherData = payload.slice(14);
+
+    var iph = new IpHeader(etherData);
+    var buf = iph.toBuffer();
+
+    for (var i = 0; i < iph.length; ++i) {
+      test.equals(etherData[i], buf[i], 'byte at index [' + i + ']');
+    }
+
+    test.done();
+  });
+};
+
+module.exports.toBufferInPlace = function(test) {
+  test.expect(34);
+
+  var parser = pcap.parse(FILE);
+  parser.on('packetData', function(payload) {
+    // skip ether frame
+    var etherData = payload.slice(14);
+
+    var iph = new IpHeader(etherData);
+    var buf = new Buffer(payload.length);
+    for (var i = 0; i < 14; ++i) {
+      buf[i] = payload[i];
+    }
+    iph.toBuffer(buf, 14);
+
+    for (var i = 0; i < (iph.length + 14); ++i) {
+      test.equals(payload[i], buf[i], 'byte at index [' + i + ']');
+    }
+
+    test.done();
+  });
 };

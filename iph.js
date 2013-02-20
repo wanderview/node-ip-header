@@ -25,6 +25,8 @@
 
 module.exports = IpHeader;
 
+var ip = require('ip');
+
 // most common protocols, expand as needed
 var PROTOCOL_TO_STRING = {
   1: 'icmp',
@@ -46,11 +48,9 @@ var PROTOCOL_FROM_STRING = {
   sctp: 132
 };
 
-// TODO: consider forcing only 20-byte headers since we don't handle options
-
-function IpHeader(opts) {
+function IpHeader(opts, offset) {
   if (opts instanceof Buffer) {
-    return IpHeader.fromBuffer(opts);
+    return IpHeader.fromBuffer(opts, offset);
   }
 
   var self = (this instanceof IpHeader)
@@ -65,12 +65,33 @@ function IpHeader(opts) {
   self.id = ~~opts.id;
   self.offset = ~~opts.offset;
   self.ttl = opts.ttl || 64;
-  self.protocol = opts.protocol || 'tcp';
-  self.protocolCode = opts.protocolCode || PROTOCOL_FROM_STRING[self.protocol];
   self.src = opts.src || '127.0.0.1';
-  self.dst = opts.src || '127.0.0.1';
-  self.bytes = opts.bytes || 20;
-  self.totalBytes = opts.totalBytes || self.bytes;
+  self.dst = opts.dst || '127.0.0.1';
+  self.length = opts.length || 20;
+
+  if (self.length !== 20) {
+    throw new Error('Unsupported IP header length [' + self.length +
+                    ']; must be 20 since options are not implemented.');
+  }
+
+  if (opts.dataLength) {
+    self.dataLength = opts.dataLength;
+    self.totalLength = self.length + self.dataLength;
+  } else {
+    self.totalLength = opts.totalLength || self.length;
+    self.dataLength = self.totalLength - self.length;
+  }
+
+  if (opts.protocol) {
+    self.protocol = opts.protocol;
+    self.protocolCode = PROTOCOL_FROM_STRING[self.protocol];
+  } else if (opts.protocolCode) {
+    self.protocolCode = opts.protocolCode;
+    self.protocol = PROTOCOL_TO_STRING[self.protocolCode];
+  } else {
+    self.protocol = 'tcp';
+    self.protocolCode = PROTOCOL_FROM_STRING[self.protocol];
+  }
 
   if (!self.protocolCode) {
     throw new Error('Unsupported protocol [' + self.protocol + ']');
@@ -130,7 +151,7 @@ IpHeader.fromBuffer = function(buf, offset) {
   var dst = ip.toString(buf.slice(offset, offset + 4));
   offset += 4;
 
-  var bytes = headerLength;
+  // TODO: read options
 
   return new IpHeader({
     flags: {df: df, mf: mf},
@@ -141,16 +162,18 @@ IpHeader.fromBuffer = function(buf, offset) {
     protocolCode: protocolCode,
     src: src,
     dst: dst,
-    bytes: bytes,
-    totalBytes: totalLength
+    length: headerLength,
+    totalLength: totalLength
   });
 };
 
 IpHeader.prototype.toBuffer = function(buf, offset) {
   offset = ~~offset;
-  buf = (buf instanceof Buffer) ? buf : new Buffer(offset + this.bytes);
+  buf = (buf instanceof Buffer) ? buf : new Buffer(offset + this.length);
 
-  var tmp = 0x40 | ((this.bytes / 4) & 0x0f);
+  var startOffset = offset;
+
+  var tmp = 0x40 | ((this.length / 4) & 0x0f);
   buf.writeUInt8(tmp, offset);
   offset += 1;
 
@@ -158,7 +181,7 @@ IpHeader.prototype.toBuffer = function(buf, offset) {
   buf.writeUInt8(0, offset);
   offset += 1;
 
-  buf.writeUInt16BE(this.totalBytes, offset);
+  buf.writeUInt16BE(this.totalLength, offset);
   offset += 2;
 
   buf.writeUInt16BE(this.id, offset);
@@ -191,11 +214,14 @@ IpHeader.prototype.toBuffer = function(buf, offset) {
 
   // recalculate the checksum
   var sum = 0;
-  for (var i = 0; i < offset; i += 2) {
+  for (var i = startOffset; i < offset; i += 2) {
     sum += buf.readUInt16BE(i);
   }
-  var checksum = ~(2 + sum);
+  var carry = (sum & 0x0f0000) >> 16;
+  var checksum = (~(sum + carry)) & 0xffff;
   buf.writeUInt16BE(checksum, checksumOffset);
+
+  // TODO: write options
 
   return buf;
 };
