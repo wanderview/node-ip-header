@@ -7,7 +7,7 @@
     "binary",
     "parse"
   ],
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": "Ben Kelly <ben@wanderview.com>",
   "license": "BSD",
   "dependencies": {
