@@ -60,8 +60,8 @@ function IpHeader(opts, offset) {
   opts = opts || {};
 
   self.flags = {};
-  self.flags.df = opts.flags && opts.flags.df;
-  self.flags.mf = opts.flags && opts.flags.mf;
+  self.flags.df = !!(opts.flags && opts.flags.df);
+  self.flags.mf = !!(opts.flags && opts.flags.mf);
   self.id = ~~opts.id;
   self.offset = ~~opts.offset;
   self.ttl = opts.ttl || 64;
