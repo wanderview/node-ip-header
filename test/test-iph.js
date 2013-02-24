@@ -117,3 +117,17 @@ module.exports.toBufferInPlace = function(test) {
     test.done();
   });
 };
+
+module.exports.mf = function(test) {
+  test.expect(2);
+
+  var iph = new IpHeader({ flags: { mf: true } });
+  test.ok(iph.flags.mf);
+
+  var buf = iph.toBuffer();
+  var iph2 = new IpHeader(buf);
+
+  test.equal(iph.flags.mf, iph2.flags.mf);
+
+  test.done();
+}

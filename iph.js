@@ -60,8 +60,8 @@ function IpHeader(opts, offset) {
   opts = opts || {};
 
   self.flags = {};
-  self.flags.df = !!opts.df;
-  self.flags.mf = !!opts.mf;
+  self.flags.df = opts.flags && opts.flags.df;
+  self.flags.mf = opts.flags && opts.flags.mf;
   self.id = ~~opts.id;
   self.offset = ~~opts.offset;
   self.ttl = opts.ttl || 64;
@@ -154,7 +154,7 @@ IpHeader.fromBuffer = function(buf, offset) {
   // TODO: read options
 
   return new IpHeader({
-    flags: {df: df, mf: mf},
+    flags: { df: df, mf: mf },
     id: id,
     offset: fragmentOffset,
     ttl: ttl,

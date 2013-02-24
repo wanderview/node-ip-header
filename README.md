@@ -30,6 +30,7 @@ var iph2 = new IpHeader({
   src: '1.1.1.1',
   dst: '3.3.3.3',
   protocol: 'udp',
+  flags: { df: true },
   dataLength: 58
 });
 var out = iph2.toBuffer();         // write header out to new buffer
