@@ -32,9 +32,13 @@ var PROTOCOL_TO_STRING = {
   1: 'icmp',
   2: 'igmp',
   6: 'tcp',
+  8: 'egp',
+  9: 'igp',
   17: 'udp',
   41: 'encap',
+  47: 'gre',
   89: 'ospf',
+  124: 'isis',
   132: 'sctp'
 };
 
@@ -42,9 +46,13 @@ var PROTOCOL_FROM_STRING = {
   icmp: 1,
   igmp: 2,
   tcp: 6,
+  egp: 8,
+  igp: 9,
   udp: 17,
   encap: 41,
+  gre: 47,
   ospf: 89,
+  isis: 124,
   sctp: 132
 };
 
